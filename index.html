@@ -1,0 +1,258 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+  <title>福井県への宿泊者数</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.6/dayjs.min.js"></script>
+</head><body>
+  <h1 id=title></h1>
+  <div id=divsels></div>
+  <select id="from-year"></select>年　～　<select id="to-year"></select>年
+  <div id=divpie></div>
+  <hr />
+  (<a href="https://resas.go.jp/tourism-guest/" target="_blank">data</a>, <a href="https://github.com/EiichiMiyagawa/overnight-stay-in-fukui" target="_blank">src on GitHub</a>)<br>
+</div>
+
+<script type="module">
+  import { CSV } from "https://js.sabae.cc/CSV.js";
+  import { ChartBar } from "https://eiichimiyagawa.github.io/chart-bar-plotly/chart-bar.js";
+  
+  // iOS14以前に関する対応（top-level await未対応のため）
+  addEventListener("load", async () => {
+    title.textContent = document.title;
+    
+    const cities = {
+      "福井市": 18201,
+      "敦賀市": 18202,
+      "小浜市": 18204,
+      "大野市": 18205,
+      "勝山市": 18206,
+      "鯖江市": 18207,
+      "あわら市": 18208,
+      "越前市": 18209,
+      "坂井市": 18210,
+      "永平寺町": 18322,
+      "池田町": 18382,
+      "南越前町": 18404,
+      "越前町": 18423,
+      "美浜町": 18442,
+      "高浜町": 18481,
+      "おおい町": 18483,
+      "若狭町": 18501
+    };
+
+    const prefectures = {
+        "北海道": 1,
+        "青森県": 2,
+        "岩手県": 3,
+        "宮城県": 4,
+        "秋田県": 5,
+        "山形県": 6,
+        "福島県": 7,
+        "茨城県": 8,
+        "栃木県": 9,
+        "群馬県": 10,
+        "埼玉県": 11,
+        "千葉県": 12,
+        "東京都": 13,
+        "神奈川県": 14,
+        "新潟県": 15,
+        "富山県": 16,
+        "石川県": 17,
+        "福井県": 18,
+        "山梨県": 19,
+        "長野県": 20,
+        "岐阜県": 21,
+        "静岡県": 22,
+        "愛知県": 23,
+        "三重県": 24,
+        "滋賀県": 25,
+        "京都府": 26,
+        "大阪府": 27,
+        "兵庫県": 28,
+        "奈良県": 29,
+        "和歌山県": 30,
+        "鳥取県": 31,
+        "島根県": 32,
+        "岡山県": 33,
+        "広島県": 34,
+        "山口県": 35,
+        "徳島県": 36,
+        "香川県": 37,
+        "愛媛県": 38,
+        "高知県": 39,
+        "福岡県": 40,
+        "佐賀県": 41,
+        "長崎県": 42,
+        "熊本県": 43,
+        "大分県": 44,
+        "宮崎県": 45,
+        "鹿児島県": 46,
+        "沖縄県": 47
+      };
+    
+    const prefUrl = "./pref.json";
+    const prefData = await (await fetch(prefUrl)).json();
+    const lodgingUrl = "./lodging.json";
+    const lodgingData = await (await fetch(lodgingUrl)).json();
+    
+    const from = dayjs("2020/01/01");
+    const to = dayjs("2021/01/01");
+    
+    const selectFromYearElement = document.getElementById("from-year");
+    const selectToYearElement = document.getElementById("to-year");
+    for (let y = 2020; y <= 2021; y++) {
+      const option = document.createElement("option");
+      option.textContent = y;
+      option.value = y;
+      const fromOption = option.cloneNode(true);
+      const toOption = option.cloneNode(true);
+      if (from.year() == y) {
+        fromOption.selected = true;
+      }
+      if (to.year() == y) {
+        toOption.selected = true;
+      }
+      selectFromYearElement.append(fromOption);
+      selectToYearElement.append(toOption);
+    }
+    
+    const show = () => {
+      divpie.innerHTML = "";
+
+      const csv2 = lodgingData.filter((d) => {
+        const node2array = (nodes) => {
+          const res = [];
+          for (const n of nodes) {
+            res.push(n);
+          }
+          return res;
+        };
+        
+        const generateKeys = (selectedOptions) => {
+          const keys = [];
+          for (let i = 0; i < selectedOptions.length; i++) {
+            keys.push(selectedOptions[i].value);
+          }
+          // 空要素は削除
+          return keys.filter(Boolean);
+        };
+        
+        const keys = node2array(divsels.querySelectorAll("select")).map(s => [s.dataname, generateKeys(s.selectedOptions)]);
+        const from = selectFromYearElement.value;
+        const to = selectToYearElement.value;
+        const base = d["year"];
+        if ((from > base) || (base < to)) {
+          return false;
+        }
+        
+        for (const key of keys) {
+          if (key[1].length != 0) {
+            if (!key[1].includes(d[key[0]])) {
+              return false;
+            }
+          }
+        }
+        
+        return true;
+      });
+      
+      if (csv2.length) {
+        const data = {};
+        prefData.forEach((p) => {
+          for (const d of csv2) {
+            const key = p.pref;
+            const value = d[p.prefCode];
+            if (!value) {
+              continue;
+            }
+            if (!data[key]) {
+              data[key] = 0;
+            }
+            data[key] += value;
+          }
+        });
+
+        const sortData = (d) => {
+          const keys = Object.keys(prefectures);
+          const sortKeys = keys.sort((k1, k2) => {
+            if (prefectures[k1] < prefectures[k2]) {
+              return 1;
+            }
+            if (prefectures[k1] > prefectures[k2]) {
+              return -1;
+            }
+            return 0;
+          });
+
+          const res = {};
+          sortKeys.forEach((sk) => {
+            res[sk] = d[sk];
+          });
+          return res;
+        };
+        
+        const chartBar = new ChartBar(sortData(data), {
+          height: 1200,
+          orientation: "h"
+        });
+        chartBar.id = "chart-bar";
+        const div2 = document.createElement("div");
+        div2.style.display = "inline-block";
+        div2.appendChild(chartBar);
+        divpie.append(div2);
+      }
+    };
+    
+    const box = document.createElement("span");
+    box.style.display = "inline-block";
+    const span = document.createElement("span");
+    span.textContent = "市町村";
+    box.appendChild(span);
+    box.appendChild(document.createElement("br"));
+
+    const selectCityElement = document.createElement("select");
+    selectCityElement.setAttribute("multiple", true);
+    selectCityElement.dataname = "cityCode";
+    const allOption = document.createElement("option");
+    allOption.textContent = "";
+    allOption.value = "";
+    selectCityElement.appendChild(allOption);
+    Object.keys(cities).forEach((key) => {
+      const option = document.createElement("option");
+      option.textContent = key;
+      option.value = cities[key];
+      selectCityElement.appendChild(option);
+    });
+    box.appendChild(selectCityElement);
+    divsels.appendChild(box);
+
+    selectCityElement.onchange =  ((event) => {
+      show();
+    });
+    
+    selectFromYearElement.onchange = ((event) => {
+      show();
+    });
+    selectToYearElement.onchange = ((event) => {
+      show();
+    });
+    
+    show();
+  });
+  
+</script>
+
+<style>
+  body {
+    text-align: center;
+    font-family: sans-serif;
+  }
+  textarea {
+    width: 70vw;
+    height: 8em;
+  }
+  #divsels {
+    margin-bottom: .5em;
+  }
+  #prefbox > * {
+    margin: .5em .2em;
+  }
+</style>
