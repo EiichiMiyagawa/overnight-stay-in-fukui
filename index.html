@@ -139,7 +139,7 @@
         const from = selectFromYearElement.value;
         const to = selectToYearElement.value;
         const base = d["year"];
-        if ((from > base) || (base < to)) {
+        if ((from > base) || (base > to)) {
           return false;
         }
         
